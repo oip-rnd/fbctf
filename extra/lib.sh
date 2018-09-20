@@ -3,6 +3,9 @@
 # Facebook CTF: Functions for provisioning scripts
 #
 
+SUDO=sudo
+[ -n "$UNSUDO" ] && SUDO=''
+
 function log() {
   echo "[+] $@"
 }
@@ -29,7 +32,7 @@ function ok_log() {
 function dl() {
   local __url=$1
   local __dest=$2
-  sudo curl --retry 5 --retry-delay 15 -sSL "$__url" -o "$__dest"
+  $SUDO curl --retry 5 --retry-delay 15 -sSL "$__url" -o "$__dest"
 }
 
 function dl_pipe() {
@@ -39,7 +42,7 @@ function dl_pipe() {
 
 function package_repo_update() {
   log "Running apt-get update"
-  sudo DEBIAN_FRONTEND=noninteractive apt-get update
+  $SUDO DEBIAN_FRONTEND=noninteractive apt-get update
 }
 
 function package() {
@@ -47,30 +50,30 @@ function package() {
     log "$1 is already installed. skipping."
   else
     log "Installing $1"
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install $1 -y --no-install-recommends
+    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install $1 -y --no-install-recommends
   fi
 }
 
 function install_unison() {
   cd /
-  dl_pipe "https://www.archlinux.org/packages/extra/x86_64/unison/download/" | sudo tar Jx
+  dl_pipe "https://www.archlinux.org/packages/extra/x86_64/unison/download/" | $SUDO tar Jx
 }
 
 function repo_osquery() {
   log "Adding osquery repository keys"
-  sudo DEBIAN_FRONTEND=noninteractive apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1484120AC4E9F8A1A577AEEE97A80C63C9D8B80B
-  sudo DEBIAN_FRONTEND=noninteractive add-apt-repository "deb [arch=amd64] https://pkg.osquery.io/deb deb main"
+  $SUDO DEBIAN_FRONTEND=noninteractive apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1484120AC4E9F8A1A577AEEE97A80C63C9D8B80B
+  $SUDO DEBIAN_FRONTEND=noninteractive add-apt-repository "deb [arch=amd64] https://pkg.osquery.io/deb deb main"
 }
 
 function install_mysql() {
   local __pwd=$1
 
-  echo "mysql-server-5.5 mysql-server/root_password password $__pwd" | sudo debconf-set-selections
-  echo "mysql-server-5.5 mysql-server/root_password_again password $__pwd" | sudo debconf-set-selections
+  echo "mysql-server-5.5 mysql-server/root_password password $__pwd" | $SUDO debconf-set-selections
+  echo "mysql-server-5.5 mysql-server/root_password_again password $__pwd" | $SUDO debconf-set-selections
   package mysql-server
 
   # It should be started automatically, but just in case
-  sudo service mysql restart
+  $SUDO service mysql restart
 }
 
 function set_motd() {
@@ -78,9 +81,9 @@ function set_motd() {
 
   # If the cloudguest MOTD exists, disable it
   if [[ -f /etc/update-motd.d/51/cloudguest ]]; then
-    sudo chmod -x /etc/update-motd.d/51-cloudguest
+    $SUDO chmod -x /etc/update-motd.d/51-cloudguest
   fi
-  sudo cp "$__path/extra/motd-ctf.sh" /etc/update-motd.d/10-help-text
+  $SUDO cp "$__path/extra/motd-ctf.sh" /etc/update-motd.d/10-help-text
 }
 
 function run_grunt() {
@@ -104,8 +107,8 @@ function self_signed_cert() {
   local __devcert=$1
   local __devkey=$2
 
-  sudo openssl req -nodes -newkey rsa:2048 -keyout "$__devkey" -out "$__csr" -subj "/O=Facebook CTF"
-  sudo openssl x509 -req -days 365 -in "$__csr" -signkey "$__devkey" -out "$__devcert"
+  $SUDO openssl req -nodes -newkey rsa:2048 -keyout "$__devkey" -out "$__csr" -subj "/O=Facebook CTF"
+  $SUDO openssl x509 -req -days 365 -in "$__csr" -signkey "$__devkey" -out "$__devcert"
 }
 
 function letsencrypt_cert() {
@@ -114,7 +117,7 @@ function letsencrypt_cert() {
   local __docker=$5
 
   dl "https://dl.eff.org/certbot-auto" /usr/bin/certbot-auto
-  sudo chmod a+x /usr/bin/certbot-auto
+  $SUDO chmod a+x /usr/bin/certbot-auto
 
   if [[ "$__email" == "none" ]]; then
     read -p ' -> What is the email for the SSL Certificate recovery? ' __myemail
@@ -134,14 +137,14 @@ function letsencrypt_cert() {
 		if [[ ! ( -d /etc/letsencrypt && "\$(ls -A /etc/letsencrypt)" ) ]]; then
 		    /usr/bin/certbot-auto certonly -n --agree-tos --standalone --standalone-supported-challenges tls-sni-01 -m "$__myemail" -d "$__mydomain"
 		fi
-		sudo ln -sf "/etc/letsencrypt/live/$__mydomain/fullchain.pem" "$1"
-		sudo ln -sf "/etc/letsencrypt/live/$__mydomain/privkey.pem" "$2"
+		$SUDO ln -sf "/etc/letsencrypt/live/$__mydomain/fullchain.pem" "$1"
+		$SUDO ln -sf "/etc/letsencrypt/live/$__mydomain/privkey.pem" "$2"
 EOF
-    sudo chmod +x /root/tmp/certbot.sh
+    $SUDO chmod +x /root/tmp/certbot.sh
   else
     /usr/bin/certbot-auto certonly -n --agree-tos --standalone --standalone-supported-challenges tls-sni-01 -m "$__myemail" -d "$__mydomain"
-    sudo ln -s "/etc/letsencrypt/live/$__mydomain/fullchain.pem" "$1" || true
-    sudo ln -s "/etc/letsencrypt/live/$__mydomain/privkey.pem" "$2" || true
+    $SUDO ln -s "/etc/letsencrypt/live/$__mydomain/fullchain.pem" "$1" || true
+    $SUDO ln -s "/etc/letsencrypt/live/$__mydomain/privkey.pem" "$2" || true
   fi
 }
 
@@ -151,8 +154,8 @@ function own_cert() {
 
   read -p ' -> SSL Certificate file location? ' __mycert
   read -p ' -> SSL Key Certificate file location? ' __mykey
-  sudo cp "$__mycert" "$__owncert"
-  sudo cp "$__mykey" "$__ownkey"
+  $SUDO cp "$__mycert" "$__owncert"
+  $SUDO cp "$__mykey" "$__ownkey"
 }
 
 function install_nginx() {
@@ -168,7 +171,7 @@ function install_nginx() {
   local __certs_path="/etc/nginx/certs"
 
   log "Deploying certificates"
-  sudo mkdir -p "$__certs_path"
+  $SUDO mkdir -p "$__certs_path"
 
   if [[ "$__mode" = "dev" ]]; then
     local __cert="$__certs_path/dev.crt"
@@ -202,21 +205,21 @@ function install_nginx() {
   package nginx
 
   __dhparam="/etc/nginx/certs/dhparam.pem"
-  sudo openssl dhparam -out "$__dhparam" 2048
+  $SUDO openssl dhparam -out "$__dhparam" 2048
 
   if [[ "$__multiservers" == true ]]; then
-      cat "$__path/extra/nginx/nginx.conf" | sed "s|CTFPATH|$__path/src|g" | sed "s|CER_FILE|$__cert|g" | sed "s|KEY_FILE|$__key|g" | sed "s|DHPARAM_FILE|$__dhparam|g" | sed "s|HHVMSERVER|$__hhvmserver|g" | sudo tee /etc/nginx/sites-available/fbctf.conf
+      cat "$__path/extra/nginx/nginx.conf" | sed "s|CTFPATH|$__path/src|g" | sed "s|CER_FILE|$__cert|g" | sed "s|KEY_FILE|$__key|g" | sed "s|DHPARAM_FILE|$__dhparam|g" | sed "s|HHVMSERVER|$__hhvmserver|g" | $SUDO tee /etc/nginx/sites-available/fbctf.conf
   else
-      cat "$__path/extra/nginx.conf" | sed "s|CTFPATH|$__path/src|g" | sed "s|CER_FILE|$__cert|g" | sed "s|KEY_FILE|$__key|g" | sed "s|DHPARAM_FILE|$__dhparam|g" | sudo tee /etc/nginx/sites-available/fbctf.conf
+      cat "$__path/extra/nginx.conf" | sed "s|CTFPATH|$__path/src|g" | sed "s|CER_FILE|$__cert|g" | sed "s|KEY_FILE|$__key|g" | sed "s|DHPARAM_FILE|$__dhparam|g" | $SUDO tee /etc/nginx/sites-available/fbctf.conf
   fi
 
-  sudo rm -f /etc/nginx/sites-enabled/default
-  sudo ln -sf /etc/nginx/sites-available/fbctf.conf /etc/nginx/sites-enabled/fbctf.conf
+  $SUDO rm -f /etc/nginx/sites-enabled/default
+  $SUDO ln -sf /etc/nginx/sites-available/fbctf.conf /etc/nginx/sites-enabled/fbctf.conf
 
   if [[ "$__multiservers" == false ]]; then
       # Restart nginx
-      sudo nginx -t
-      sudo service nginx restart
+      $SUDO nginx -t
+      $SUDO service nginx restart
   fi
 }
 
@@ -230,33 +233,33 @@ function install_hhvm() {
   package software-properties-common
 
   log "Adding HHVM keys"
-  sudo DEBIAN_FRONTEND=noninteractive apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0x5a16e7281be7a449
-  sudo DEBIAN_FRONTEND=noninteractive apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xB4112585D386EB94
+  $SUDO DEBIAN_FRONTEND=noninteractive apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0x5a16e7281be7a449
+  $SUDO DEBIAN_FRONTEND=noninteractive apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xB4112585D386EB94
 
   log "Adding HHVM repo"
-  sudo DEBIAN_FRONTEND=noninteractive add-apt-repository "deb http://dl.hhvm.com/ubuntu xenial-lts-3.21 main"
+  $SUDO DEBIAN_FRONTEND=noninteractive add-apt-repository "deb http://dl.hhvm.com/ubuntu xenial-lts-3.21 main"
 
   package_repo_update
   package hhvm
 
   log "Enabling HHVM to start by default"
-  sudo update-rc.d hhvm defaults
+  $SUDO update-rc.d hhvm defaults
 
   log "Copying HHVM configuration"
   if [[ "$__multiservers" == true ]]; then
-    cat "$__path/extra/hhvm.conf" | sed "s|CTFPATH|$__path/|g" | sed "s|hhvm.server.ip|;hhvm.server.ip|g" | sed "s|hhvm.server.file_socket|;hhvm.server.file_socket|g" | sudo tee "$__config"
+    cat "$__path/extra/hhvm.conf" | sed "s|CTFPATH|$__path/|g" | sed "s|hhvm.server.ip|;hhvm.server.ip|g" | sed "s|hhvm.server.file_socket|;hhvm.server.file_socket|g" | $SUDO tee "$__config"
   else
-    cat "$__path/extra/hhvm.conf" | sed "s|CTFPATH|$__path/|g" | sed "s|hhvm.server.port|;hhvm.server.port|g" | sudo tee "$__config"
+    cat "$__path/extra/hhvm.conf" | sed "s|CTFPATH|$__path/|g" | sed "s|hhvm.server.port|;hhvm.server.port|g" | $SUDO tee "$__config"
   fi
 
   log "HHVM as PHP systemwide"
-  sudo /usr/bin/update-alternatives --install /usr/bin/php php /usr/bin/hhvm 60
+  $SUDO /usr/bin/update-alternatives --install /usr/bin/php php /usr/bin/hhvm 60
 
   log "PHP Alternaives:"
-  sudo /usr/bin/update-alternatives --display php
+  $SUDO /usr/bin/update-alternatives --display php
 
   log "Restarting HHVM"
-  sudo service hhvm restart
+  $SUDO service hhvm restart
 
   log "PHP/HHVM Version:"
   php -v
@@ -269,10 +272,10 @@ function hhvm_performance() {
   local __oldrepo="/var/run/hhvm/hhvm.hhbc"
   local __repofile="/var/cache/hhvm/hhvm.hhbc"
 
-  cat "$__config" | sed "s|$__oldrepo|$__repofile|g" | sudo tee "$__config"
-  sudo hhvm-repo-mode enable "$__path"
-  sudo chown www-data:www-data "$__repofile"
-  sudo service hhvm restart
+  cat "$__config" | sed "s|$__oldrepo|$__repofile|g" | $SUDO tee "$__config"
+  $SUDO hhvm-repo-mode enable "$__path"
+  $SUDO chown www-data:www-data "$__repofile"
+  $SUDO service hhvm restart
 }
 
 function install_composer() {
@@ -281,13 +284,13 @@ function install_composer() {
   cd $__path
   dl_pipe "https://getcomposer.org/installer" | php
   hhvm composer.phar install
-  sudo mv composer.phar /usr/bin
-  sudo chmod +x /usr/bin/composer.phar
+  $SUDO mv composer.phar /usr/bin
+  $SUDO chmod +x /usr/bin/composer.phar
 }
 
 function install_nodejs() {
   log "Downloading and setting node.js version 6.x repo information"
-  dl_pipe "https://deb.nodesource.com/setup_6.x" | sudo -E bash -
+  dl_pipe "https://deb.nodesource.com/setup_6.x" | $SUDO -E bash -
 
   log "Installing node.js"
   package nodejs
@@ -380,17 +383,17 @@ function update_repo() {
 
   log "Starting sync to $__ctf_path"
   if [[ "$__code_path" != "$__ctf_path" ]]; then
-      [[ -d "$__ctf_path" ]] || sudo mkdir -p "$__ctf_path"
+      [[ -d "$__ctf_path" ]] || $SUDO mkdir -p "$__ctf_path"
 
       log "Copying all CTF code to destination folder"
-      sudo rsync -a --exclude node_modules --exclude vendor "$__code_path/" "$__ctf_path/"
+      $SUDO rsync -a --exclude node_modules --exclude vendor "$__code_path/" "$__ctf_path/"
 
       # This is because sync'ing files is done with unison
       if [[ "$__mode" == "dev" ]]; then
           log "Configuring git to ignore permission changes"
           git -C "$CTF_PATH/" config core.filemode false
           log "Setting permissions"
-          sudo chmod -R 755 "$__ctf_path/"
+          $SUDO chmod -R 755 "$__ctf_path/"
       fi
   fi
 
@@ -419,12 +422,12 @@ function quick_setup() {
   elif [[ "$__type" = "start_docker" ]]; then
     package_repo_update
     package docker-ce
-    sudo docker build --build-arg MODE=$__mode -t="fbctf-image" .
-    sudo docker run --name fbctf -p 80:80 -p 443:443 fbctf-image
+    $SUDO docker build --build-arg MODE=$__mode -t="fbctf-image" .
+    $SUDO docker run --name fbctf -p 80:80 -p 443:443 fbctf-image
   elif [[ "$__type" = "start_docker_multi" ]]; then
     package_repo_update
     package python-pip
-    sudo pip install docker-compose
+    $SUDO pip install docker-compose
     if [[ "$__mode" = "prod" ]]; then
       sed -i -e 's|      #  MODE: prod|        MODE: prod|g' ./docker-compose.yml
       sed -i -e 's|      #args|      args|g' ./docker-compose.yml
@@ -432,7 +435,7 @@ function quick_setup() {
       sed -i -e 's|        MODE: prod|      #  MODE: prod|g' ./docker-compose.yml
       sed -i -e 's|      args|      #args|g' ./docker-compose.yml
     fi
-    sudo docker-compose up
+    $SUDO docker-compose up
   elif [[ "$__type" = "start_vagrant" ]]; then
     cp Vagrantfile-single Vagrantfile
     export FBCTF_PROVISION_ARGS="-m $__mode"
